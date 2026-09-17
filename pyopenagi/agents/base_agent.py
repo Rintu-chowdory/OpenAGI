@@ -228,7 +228,7 @@ class BaseAgent:
         tail = messages[-6:]
         notice = [{"role": "user", "content": "[earlier steps trimmed to fit the model context]"}]
         trimmed = head + notice + tail
-        while est(trimmed) > max_tokens and len(tail) > 2:
+        while est(trimmed) > max_tokens and len(tail) > 1:
             tail = tail[:-1]
             trimmed = head + notice + tail
         return trimmed
