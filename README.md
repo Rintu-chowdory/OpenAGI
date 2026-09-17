@@ -12,7 +12,7 @@ rounds: 2 · turnaround: 0.01s
 
 ## What's different from upstream
 
-- **Standalone execution engine** (`pyopenagi/core/llm.py`) — when the `aios` kernel isn't installed, agents call the LLM API directly with full function-calling support. Same `ReactAgent` flow, zero infrastructure.
+- **Standalone execution engine** (`pyopenagi/core/llm.py`) — when the `aios` kernel isn't installed, agents call the LLM API directly with full function-calling support. Same `ReactAgent` flow, zero infrastructure. Retries with backoff on rate limits and trims long conversations to fit token caps — long runs work even on the free Groq tier.
 - **CLI** — `openagi run`, `openagi list`, `openagi tools`, `openagi doctor` (registered as a console script).
 - **My agents** (`pyopenagi/agents/rintu/`):
   - `dev_ops_agent` — CI/CD, Docker, K8s and deployment-strategy consultant
@@ -32,9 +32,9 @@ git clone https://github.com/Rintu-chowdory/OpenAGI.git
 cd OpenAGI
 pip install -e .
 
-# Groq (recommended — fast + cheap llama-3.3-70b)
+# Groq (recommended — fast + cheap gpt-oss-120b)
 export OPENAGI_LLM_BASE_URL=https://api.groq.com/openai/v1
-export OPENAGI_LLM_MODEL=llama-3.3-70b-versatile
+export OPENAGI_LLM_MODEL=openai/gpt-oss-120b
 export OPENAGI_LLM_API_KEY=gsk_...
 
 openagi doctor                       # check your setup
@@ -52,10 +52,11 @@ No key set? `openagi doctor` tells you exactly what's missing.
 |---|---|---|
 | `OPENAGI_LLM_API_KEY` | LLM API key (fallbacks: `GROQ_API_KEY`, `OPENAI_API_KEY`) | — |
 | `OPENAGI_LLM_BASE_URL` | OpenAI-compatible endpoint | auto from key type |
-| `OPENAGI_LLM_MODEL` | Model name | `llama-3.3-70b-versatile` / `gpt-4o-mini` |
+| `OPENAGI_LLM_MODEL` | Model name | `openai/gpt-oss-120b` / `gpt-4o-mini` |
 | `OPENAGI_EXECUTION_MODE` | `auto` \| `standalone` \| `aios` | `auto` |
 | `OPENAGI_AGENT_HUB_URL` | Agent hub for upload/download | upstream hub |
 | `OPENAGI_CACHE_DIR` | Agent cache location | `~/.openagi/cache` |
+| `OPENAGI_MAX_CONTEXT_TOKENS` | Trim long conversations to this size (rate-limit safety) | `6000` |
 
 See `.env.example` — a `.env` in the repo root is loaded automatically.
 

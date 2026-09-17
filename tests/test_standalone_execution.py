@@ -67,6 +67,8 @@ def test_standalone_get_response_shape(standalone_mode):
 
 def test_standalone_without_key_raises(monkeypatch):
     monkeypatch.setenv("OPENAGI_EXECUTION_MODE", "standalone")
+    for var in ("OPENAGI_LLM_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
     llm_core.set_llm(llm_core.StandaloneLLM(api_key=None))
     agent = _make_agent()
     with pytest.raises(RuntimeError, match="No LLM API key"):
@@ -83,3 +85,23 @@ def test_full_rintu_agent_runs(standalone_mode, monkeypatch):
     agent = agent_class("rintu/dev_ops_agent", "how do I cache docker layers?", AgentProcessFactory(), "console")
     result = agent.run()
     assert result and result["agent_name"] == "rintu/dev_ops_agent"
+
+
+def test_context_trim_fits_token_cap():
+    from pyopenagi.agents.base_agent import BaseAgent
+    big = [
+        {"role": "system", "content": "x" * 200},
+        {"role": "user", "content": "the original task"},
+    ] + [{"role": "assistant", "content": "y" * 4000} for _ in range(10)]
+    trimmed = BaseAgent._trim_context(big, max_tokens=6000)
+    assert trimmed[0]["role"] == "system"
+    assert trimmed[1]["content"] == "the original task"
+    est = sum(len(str(m.get("content", ""))) for m in trimmed) // 4
+    assert est <= 6000
+    assert len(trimmed) < len(big)
+
+
+def test_context_trim_leaves_short_conversations_alone():
+    from pyopenagi.agents.base_agent import BaseAgent
+    small = [{"role": "system", "content": "sys"}, {"role": "user", "content": "hi"}]
+    assert BaseAgent._trim_context(small, max_tokens=6000) is small

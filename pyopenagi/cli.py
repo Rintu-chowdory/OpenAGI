@@ -86,7 +86,7 @@ def run(agent_name, task, log_mode, as_json):
             raise click.ClickException(
                 "No LLM API key found. Set OPENAGI_LLM_API_KEY (or GROQ_API_KEY / OPENAI_API_KEY).\n"
                 "For Groq: export OPENAGI_LLM_BASE_URL=https://api.groq.com/openai/v1 "
-                "OPENAGI_LLM_MODEL=llama-3.3-70b-versatile"
+                "OPENAGI_LLM_MODEL=openai/gpt-oss-120b"
             )
 
     factory = AgentFactory(agent_process_factory=AgentProcessFactory(), agent_log_mode=log_mode)

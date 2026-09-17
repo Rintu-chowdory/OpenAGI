@@ -14,7 +14,7 @@ def test_llm_config_groq_default(monkeypatch):
     cfg = llm_core.llm_config()
     assert cfg["base_url"] == "https://api.groq.com/openai/v1"
     assert cfg["api_key"] == "gsk_test"
-    assert cfg["model"] == "llama-3.3-70b-versatile"
+    assert cfg["model"] == "openai/gpt-oss-120b"
 
 
 def test_llm_config_env_override(monkeypatch):

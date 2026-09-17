@@ -7,7 +7,7 @@
 #
 # Configuration (env vars, or a loaded .env):
 #   OPENAGI_LLM_BASE_URL     e.g. https://api.groq.com/openai/v1
-#   OPENAGI_LLM_MODEL        e.g. llama-3.3-70b-versatile
+#   OPENAGI_LLM_MODEL        e.g. openai/gpt-oss-120b (Groq)
 #   OPENAGI_LLM_API_KEY      the API key
 #   OPENAGI_EXECUTION_MODE   "auto" (default) | "standalone" | "aios"
 #
@@ -46,7 +46,7 @@ def llm_config():
         else:
             base_url = OPENAI_BASE_URL
     if not model:
-        model = "llama-3.3-70b-versatile" if "groq" in base_url else "gpt-4o-mini"
+        model = "openai/gpt-oss-120b" if "groq" in base_url else "gpt-4o-mini"
 
     return {"base_url": base_url, "model": model, "api_key": api_key}
 
@@ -109,9 +109,15 @@ class StandaloneLLM:
     def configured(self):
         return bool(self.api_key)
 
-    def chat(self, messages, tools=None, temperature=0.0, json_mode=False):
+    def chat(self, messages, tools=None, temperature=0.0, json_mode=False, max_retries=4):
         """Return (content, tool_calls) where tool_calls is
-        [{"name": ..., "parameters": {...}}, ...] or None."""
+        [{"name": ..., "parameters": {...}}, ...] or None.
+
+        Retries with backoff on rate limits (429) and transient server
+        errors (500/502/503/529) — the free Groq tier rate-limits easily.
+        """
+        import time
+
         import requests
 
         payload = {
@@ -124,13 +130,27 @@ class StandaloneLLM:
         if json_mode:
             payload["response_format"] = {"type": "json_object"}
 
-        resp = requests.post(
-            f"{self.base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            json=payload,
-            timeout=self.timeout,
-        )
-        if resp.status_code != 200:
+        backoff = 5
+        for attempt in range(max_retries + 1):
+            resp = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json=payload,
+                timeout=self.timeout,
+            )
+            if resp.status_code == 200:
+                break
+            if resp.status_code in (429, 500, 502, 503, 529) and attempt < max_retries:
+                wait = backoff
+                try:  # honour the server's Retry-After if present
+                    wait = max(wait, float(resp.headers.get("Retry-After", 0)))
+                except ValueError:
+                    pass
+                print(f"[llm] {resp.status_code} from API, retrying in {wait:.0f}s "
+                      f"(attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+                backoff = min(backoff * 2, 60)
+                continue
             raise RuntimeError(f"LLM request failed ({resp.status_code}): {resp.text[:500]}")
 
         message = resp.json()["choices"][0]["message"]

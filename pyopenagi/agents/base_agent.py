@@ -202,6 +202,37 @@ class BaseAgent:
             return thread.join()
         return self.query_loop_standalone(query)
 
+    @staticmethod
+    def _trim_context(messages, max_tokens=None):
+        """Trim the middle of a long conversation to fit token limits.
+
+        Keeps the head (system prompt + original task) and the most recent
+        messages. Free Groq tiers cap requests at 8000 TPM, so long agent
+        runs need this. Override the cap with OPENAGI_MAX_CONTEXT_TOKENS.
+        """
+        import os as _os
+
+        if max_tokens is None:
+            try:
+                max_tokens = int(_os.environ.get("OPENAGI_MAX_CONTEXT_TOKENS", 6000))
+            except ValueError:
+                max_tokens = 6000
+
+        def est(msgs):
+            return sum(len(str(m.get("content", ""))) for m in msgs) // 4
+
+        if est(messages) <= max_tokens or len(messages) <= 4:
+            return messages
+
+        head = messages[:2]
+        tail = messages[-6:]
+        notice = [{"role": "user", "content": "[earlier steps trimmed to fit the model context]"}]
+        trimmed = head + notice + tail
+        while est(trimmed) > max_tokens and len(tail) > 2:
+            tail = tail[:-1]
+            trimmed = head + notice + tail
+        return trimmed
+
     def query_loop_standalone(self, query):
         """Standalone execution: call an OpenAI-compatible LLM directly.
 
@@ -222,7 +253,7 @@ class BaseAgent:
 
         start_time = time.time()
         content, tool_calls = llm.chat(
-            messages=query.messages,
+            messages=self._trim_context(query.messages),
             tools=query.tools,
             temperature=0.0,
             json_mode=(query.message_return_type == "json"),
