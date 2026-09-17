@@ -19,7 +19,8 @@ class Interactor:
 
     def list_available_agents(self) -> list[dict]:
         """List available agents in the database"""
-        url = "https://openagi-beta.vercel.app/api/get_all_agents"
+        base_url = os.environ.get("OPENAGI_AGENT_HUB_URL", "https://openagi-beta.vercel.app")
+        url = f"{base_url}/api/get_all_agents"
         response = requests.get(url)
         response: dict = response.json()
         agent_list = []
@@ -38,7 +39,8 @@ class Interactor:
         assert "/" in agent, 'agent_name should in the format of "author/agent_name"'
         author, name = agent.split("/")
         # print(author, name)
-        query = f'https://openagi-beta.vercel.app/api/download?author={author}&name={name}'
+        base_url = os.environ.get("OPENAGI_AGENT_HUB_URL", "https://openagi-beta.vercel.app")
+        query = f'{base_url}/api/download?author={author}&name={name}'
         response = requests.get(query)
         response: dict = response.json()
 

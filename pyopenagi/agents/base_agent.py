@@ -16,7 +16,10 @@ from ..utils.chat_template import Query
 
 import importlib
 
-from aios.hooks.stores._global import global_llm_req_queue_add_message
+try:
+    from aios.hooks.stores._global import global_llm_req_queue_add_message
+except Exception:  # AIOS kernel not installed -> standalone execution mode
+    global_llm_req_queue_add_message = None
 
 class CustomizedThread(Thread):
     def __init__(self, target, args=()):
@@ -191,9 +194,56 @@ class BaseAgent:
             temperature=0.0
         ):
 
-        thread = CustomizedThread(target=self.query_loop, args=(query, ))
-        thread.start()
-        return thread.join()
+        from ..core.llm import use_aios
+
+        if use_aios():
+            thread = CustomizedThread(target=self.query_loop, args=(query, ))
+            thread.start()
+            return thread.join()
+        return self.query_loop_standalone(query)
+
+    def query_loop_standalone(self, query):
+        """Standalone execution: call an OpenAI-compatible LLM directly.
+
+        Used when the AIOS kernel is not available. Returns the same tuple
+        shape as query_loop so ReactAgent and CallCore work unchanged.
+        """
+        from ..core.llm import get_llm, ChatResult
+
+        agent_process = self.create_agent_request(query)
+
+        llm = get_llm()
+        if not llm.configured:
+            raise RuntimeError(
+                "No LLM API key configured for standalone execution. "
+                "Set OPENAGI_LLM_API_KEY (or GROQ_API_KEY / OPENAI_API_KEY), "
+                "and optionally OPENAGI_LLM_BASE_URL / OPENAGI_LLM_MODEL."
+            )
+
+        start_time = time.time()
+        content, tool_calls = llm.chat(
+            messages=query.messages,
+            tools=query.tools,
+            temperature=0.0,
+            json_mode=(query.message_return_type == "json"),
+        )
+        end_time = time.time()
+
+        response = ChatResult(content, tool_calls)
+        agent_process.set_response(response)
+        agent_process.set_status("done")
+        agent_process.set_start_time(start_time)
+        agent_process.set_end_time(end_time)
+
+        waiting_time = 0.0
+        turnaround_time = end_time - start_time
+        return (
+            agent_process.get_response(),
+            [start_time],
+            [end_time],
+            [waiting_time],
+            [turnaround_time],
+        )
 
     def query_loop(self, query):
         agent_process = self.create_agent_request(query)

@@ -1,76 +1,88 @@
-# OpenAGI: Package for AI Agent Creation
-<a href='https://arxiv.org/abs/2304.04370'><img src='https://img.shields.io/badge/Paper-PDF-red'></a>
-[![Code License](https://img.shields.io/badge/Code%20License-MIT-green.svg)](https://github.com/agiresearch/OpenAGI/blob/main/LICENSE)
-<a href='https://discord.gg/B2HFxEgTJX'><img src='https://img.shields.io/badge/Community-Discord-8A2BE2'></a>
+# OpenAGI — Personal Edition
 
+My personal fork of [OpenAGI](https://github.com/agiresearch/OpenAGI), rebuilt to actually run standalone: agents execute directly against any **OpenAI-compatible LLM API** (Groq, OpenAI, Together, OpenRouter, vLLM…) — no AIOS kernel required.
 
-## ✈️ Getting Started
-OpenAGI is used as the agent creation package to build agents for [AIOS](https://github.com/agiresearch/AIOS).
-**Notice:** For building up agents in the AIOS, please migrate to the [Cerebrum](https://github.com/agiresearch/Cerebrum), which is our latest SDK to connect with AIOS kernel.
+```
+[rintu/dev_ops_agent] Generated workflow is: [{'message': 'answer the question using reasoning', 'tool_use': []}]
 
-### Installation
-From PyPI
+RESULT
+**Final answer:** CRM systems manage customer relationships...
+rounds: 2 · turnaround: 0.01s
 ```
-pip install pyopenagi
-```
-Locally
-```
-git clone https://agiresearch/OpenAGI
+
+## What's different from upstream
+
+- **Standalone execution engine** (`pyopenagi/core/llm.py`) — when the `aios` kernel isn't installed, agents call the LLM API directly with full function-calling support. Same `ReactAgent` flow, zero infrastructure.
+- **CLI** — `openagi run`, `openagi list`, `openagi tools`, `openagi doctor` (registered as a console script).
+- **My agents** (`pyopenagi/agents/rintu/`):
+  - `dev_ops_agent` — CI/CD, Docker, K8s and deployment-strategy consultant
+  - `security_audit_agent` — internal audit, ISO 27001/NIST/BSI controls, AI governance
+  - `saas_idea_agent` — SaaS ideation, MVP scoping, go-to-market (uses the Wikipedia tool)
+- **Bug fixes**:
+  - removed hardcoded `/Users/rama2r/...` cache path → `~/.openagi/cache` (or `OPENAGI_CACHE_DIR`)
+  - agent-hub URL now configurable (`OPENAGI_AGENT_HUB_URL`)
+  - fixed malformed tool reference in `example/travel_agent` config
+- **Tests** — 23 tests incl. end-to-end agent runs against a mock LLM; CI runs on every push.
+
+## Quickstart
+
+```bash
+git clone https://github.com/Rintu-chowdory/OpenAGI.git
 cd OpenAGI
 pip install -e .
+
+# Groq (recommended — fast + cheap llama-3.3-70b)
+export OPENAGI_LLM_BASE_URL=https://api.groq.com/openai/v1
+export OPENAGI_LLM_MODEL=llama-3.3-70b-versatile
+export OPENAGI_LLM_API_KEY=gsk_...
+
+openagi doctor                       # check your setup
+openagi list                         # see available agents
+openagi run rintu/dev_ops_agent "review my GitHub Actions pipeline for a Vite + Tailwind app"
+openagi run rintu/security_audit_agent "create a GDPR-focused checklist for an AI chatbot"
+openagi run rintu/saas_idea_agent "validate this idea: AI-powered invoice reminders for freelancers"
 ```
 
-### Usage
+No key set? `openagi doctor` tells you exactly what's missing.
 
-#### Add a new agent
-To add a new agent, first you need to create a folder under the pyopenagi/agents folder.
-The folder needs to be the following structure:
-```
-- pyopenagi/agents
-  - author
-    - agent_name
-      - agent.py # main code for the agent execution logic
-      - config.json # set up configurations for agent
-      - meta_requirements.txt # dependencies that the agent needs
-```
-If you want to use external tools provided by openagi in your agents, you can follow instructions of setting up tools in [How to setup external tools](./tools.md).
-If you want to add new tools for your developing agent,
-you need to add a new tool file in the [folder](./pyopenagi/tools/).
+## Environment variables
 
-#### Upload agent
-If you have developed and tested your agent, and you would like to share your agents, you can use the following to upload your agents
-```
-python pyopenagi/agents/interact.py --mode upload --agent <author_name/agent_name>
-```
-💡Note that the `agent` param must exactly match the folder you put your agent locally.
+| Variable | Purpose | Default |
+|---|---|---|
+| `OPENAGI_LLM_API_KEY` | LLM API key (fallbacks: `GROQ_API_KEY`, `OPENAI_API_KEY`) | — |
+| `OPENAGI_LLM_BASE_URL` | OpenAI-compatible endpoint | auto from key type |
+| `OPENAGI_LLM_MODEL` | Model name | `llama-3.3-70b-versatile` / `gpt-4o-mini` |
+| `OPENAGI_EXECUTION_MODE` | `auto` \| `standalone` \| `aios` | `auto` |
+| `OPENAGI_AGENT_HUB_URL` | Agent hub for upload/download | upstream hub |
+| `OPENAGI_CACHE_DIR` | Agent cache location | `~/.openagi/cache` |
 
-#### Download agent
-If you want to look at implementations of other agents that others have developed, you can use the following command:
-```
-python pyopenagi/agents/interact.py --mode download --agent <author_name/agent_name>
-```
+See `.env.example` — a `.env` in the repo root is loaded automatically.
 
-## 🚀 Contributions
+## Building your own agents
 
-For detailed information on how to contribute, see [CONTRIBUTE](./CONTRIBUTE.md). If you would like to contribute to the codebase, [issues](https://github.com/agiresearch/OpenAGI/issues) or [pull requests](https://github.com/agiresearch/OpenAGI/pulls) are always welcome!
-
-## 🖋️ Research
-Please check out our [implementation](https://github.com/agiresearch/OpenAGI/tree/research) for our research paper [OpenAGI: When LLM Meets Domain Experts](https://arxiv.org/abs/2304.04370).
+Create `pyopenagi/agents/<your-name>/<agent_name>/`:
 
 ```
-@article{openagi,
-  title={OpenAGI: When LLM Meets Domain Experts},
-  author={Ge, Yingqiang and Hua, Wenyue and Mei, Kai and Ji, Jianchao and Tan, Juntao and Xu, Shuyuan and Li, Zelong and Zhang, Yongfeng},
-  journal={In Advances in Neural Information Processing Systems (NeurIPS)},
-  year={2023}
-}
+- agent.py              # class <CamelCaseName>(ReactAgent)
+- config.json           # name, description (system prompt), tools, meta
+- meta_requirements.txt # pip packages the agent needs
 ```
 
-## 🌍 OpenAGI Contributors
-[![OpenAGI contributors](https://contrib.rocks/image?repo=agiresearch/OpenAGI&max=300)](https://github.com/agiresearch/OpenAGI/graphs/contributors)
+Then run it: `openagi run <your-name>/<agent_name> "task"`. Tools live in `pyopenagi/tools/<org>/<tool>.py` and follow the OpenAI function-calling format — the agents in `pyopenagi/agents/rintu/` are reference implementations.
 
+## Execution modes
 
+- **auto** (default): use the AIOS kernel if installed, otherwise standalone direct-API calls.
+- **standalone**: always direct API calls — what you want on a laptop or CI.
+- **aios**: require the kernel (for AIOS scheduler research setups).
 
-## 🌟 Star History
+## Tests
 
-[![Star History Chart](https://api.star-history.com/svg?repos=agiresearch/OpenAGI&type=Date)](https://star-history.com/#agiresearch/OpenAGI&Date)
+```bash
+pip install -e . pytest
+pytest tests/          # no API keys or network needed
+```
+
+## Upstream
+
+Based on [OpenAGI](https://github.com/agiresearch/OpenAGI) (NeurIPS 2023, *"OpenAGI: When LLM Meets Domain Experts"*, MIT license). Upstream has moved agent development to [Cerebrum](https://github.com/agiresearch/Cerebrum) — this fork keeps the classic ReactAgent flow and makes it self-contained.

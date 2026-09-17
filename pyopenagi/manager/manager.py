@@ -9,11 +9,24 @@ from typing import List, Dict
 import requests
 from pathlib import Path
 
+DEFAULT_AGENT_HUB_URL = "https://openagi-beta.vercel.app"
+
+
 class AgentManager:
-    def __init__(self, base_url: str):
-        self.base_url = base_url
-        # self.cache_dir = Path(user_cache_dir("agent_manager", "AIOS"))
-        self.cache_dir = Path('/Users/rama2r/AIOS/agenthub/cache')
+    def __init__(self, base_url: str | None = None):
+        self.base_url = (
+            base_url
+            or os.environ.get("OPENAGI_AGENT_HUB_URL")
+            or DEFAULT_AGENT_HUB_URL
+        )
+        # local cache dir: OPENAGI_CACHE_DIR or ~/.openagi/cache (was a hardcoded
+        # macOS path in the upstream project)
+        self.cache_dir = Path(
+            os.environ.get(
+                "OPENAGI_CACHE_DIR",
+                os.path.join(Path.home(), ".openagi", "cache"),
+            )
+        )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def upload_agent(self, author: str | None, name: str | None, version: str | None, folder_path: str):

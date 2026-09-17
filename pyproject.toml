@@ -26,6 +26,9 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
 ]
 
+[project.scripts]
+openagi = "pyopenagi.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/agiresearch/OpenAGI"
 Repository = "https://github.com/agiresearch/OpenAGI.git"
