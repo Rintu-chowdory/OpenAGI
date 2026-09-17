@@ -22,6 +22,7 @@ def test_rintu_agents_exist():
     assert ("rintu", "dev_ops_agent") in agents
     assert ("rintu", "security_audit_agent") in agents
     assert ("rintu", "saas_idea_agent") in agents
+    assert ("rintu", "base44_builder_agent") in agents
 
 
 def test_agent_configs_valid():
@@ -62,6 +63,7 @@ def test_cli_lists_rintu_agents():
     assert "rintu/dev_ops_agent" in res.output
     assert "rintu/security_audit_agent" in res.output
     assert "rintu/saas_idea_agent" in res.output
+    assert "rintu/base44_builder_agent" in res.output
 
 
 def test_cli_tools_command():

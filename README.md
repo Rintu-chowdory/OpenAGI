@@ -18,6 +18,7 @@ rounds: 2 · turnaround: 0.01s
   - `dev_ops_agent` — CI/CD, Docker, K8s and deployment-strategy consultant
   - `security_audit_agent` — internal audit, ISO 27001/NIST/BSI controls, AI governance
   - `saas_idea_agent` — SaaS ideation, MVP scoping, go-to-market (uses the Wikipedia tool)
+  - `base44_builder_agent` — drafts complete Base44 micro-SaaS build plans (entities, pages, workflows, build order)
 - **Bug fixes**:
   - removed hardcoded `/Users/rama2r/...` cache path → `~/.openagi/cache` (or `OPENAGI_CACHE_DIR`)
   - agent-hub URL now configurable (`OPENAGI_AGENT_HUB_URL`)
