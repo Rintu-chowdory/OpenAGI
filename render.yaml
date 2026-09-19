@@ -1,0 +1,20 @@
+# Deploy the OpenAGI Agent API to Render (free plan).
+#
+# After the first deploy, set the two "sync: false" secrets in the Render
+# dashboard (Environment): OPENAGI_LLM_API_KEY (Groq key) and AGENT_API_KEY
+# (any random string you choose — clients send it as X-API-Key).
+services:
+  - type: web
+    name: openagi-agent-api
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: OPENAGI_LLM_API_KEY
+        sync: false
+      - key: OPENAGI_LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: OPENAGI_LLM_MODEL
+        value: openai/gpt-oss-120b
+      - key: AGENT_API_KEY
+        sync: false
