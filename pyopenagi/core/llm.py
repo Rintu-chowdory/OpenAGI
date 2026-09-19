@@ -109,62 +109,99 @@ class StandaloneLLM:
     def configured(self):
         return bool(self.api_key)
 
+    def _providers(self):
+        """Primary provider first, then an optional fallback provider.
+
+        Fallback is enabled by setting OPENAGI_LLM_FALLBACK_API_KEY or
+        OPENROUTER_API_KEY. Defaults target OpenRouter's free tier.
+        """
+        providers = [{"base_url": self.base_url, "model": self.model, "api_key": self.api_key}]
+        fb_key = _env("OPENAGI_LLM_FALLBACK_API_KEY") or _env("OPENROUTER_API_KEY")
+        if fb_key:
+            providers.append({
+                "base_url": (_env("OPENAGI_LLM_FALLBACK_BASE_URL")
+                             or "https://openrouter.ai/api/v1").rstrip("/"),
+                "model": _env("OPENAGI_LLM_FALLBACK_MODEL")
+                         or "nvidia/nemotron-3-super-120b-a12b:free",
+                "api_key": fb_key,
+            })
+        return providers
+
     def chat(self, messages, tools=None, temperature=0.0, json_mode=False, max_retries=4):
         """Return (content, tool_calls) where tool_calls is
         [{"name": ..., "parameters": {...}}, ...] or None.
 
         Retries with backoff on rate limits (429) and transient server
         errors (500/502/503/529) — the free Groq tier rate-limits easily.
+        If every retry fails and a fallback provider is configured
+        (OPENROUTER_API_KEY / OPENAGI_LLM_FALLBACK_*), the request is
+        re-sent against the fallback instead of failing the agent run.
         """
         import time
 
         import requests
 
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-        }
-        if tools:
-            payload["tools"] = tools
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        last_err = None
+        for pidx, pcfg in enumerate(self._providers()):
+            payload = {
+                "model": pcfg["model"],
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if tools:
+                payload["tools"] = tools
+            if json_mode:
+                payload["response_format"] = {"type": "json_object"}
 
-        backoff = 5
-        for attempt in range(max_retries + 1):
-            resp = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=payload,
-                timeout=self.timeout,
-            )
-            if resp.status_code == 200:
-                break
-            if resp.status_code in (429, 500, 502, 503, 529) and attempt < max_retries:
-                wait = backoff
-                try:  # honour the server's Retry-After if present
-                    wait = max(wait, float(resp.headers.get("Retry-After", 0)))
-                except ValueError:
-                    pass
-                print(f"[llm] {resp.status_code} from API, retrying in {wait:.0f}s "
-                      f"(attempt {attempt + 1}/{max_retries})")
-                time.sleep(wait)
-                backoff = min(backoff * 2, 60)
-                continue
-            raise RuntimeError(f"LLM request failed ({resp.status_code}): {resp.text[:500]}")
-
-        message = resp.json()["choices"][0]["message"]
-        tool_calls = None
-        if message.get("tool_calls"):
-            tool_calls = []
-            for tc in message["tool_calls"]:
-                fn = tc.get("function", {})
+            backoff = 5
+            resp = None
+            for attempt in range(max_retries + 1):
                 try:
-                    arguments = json.loads(fn.get("arguments") or "{}")
-                except json.JSONDecodeError:
-                    arguments = {}
-                tool_calls.append({"name": fn.get("name"), "parameters": arguments})
-        return message.get("content") or "", tool_calls
+                    resp = requests.post(
+                        f"{pcfg['base_url']}/chat/completions",
+                        headers={"Authorization": f"Bearer {pcfg['api_key']}"},
+                        json=payload,
+                        timeout=self.timeout,
+                    )
+                except requests.RequestException as e:
+                    resp = None
+                    last_err = e
+                    break
+                if resp.status_code == 200:
+                    break
+                if resp.status_code in (429, 500, 502, 503, 529) and attempt < max_retries:
+                    wait = backoff
+                    try:  # honour the server's Retry-After if present
+                        wait = max(wait, float(resp.headers.get("Retry-After", 0)))
+                    except ValueError:
+                        pass
+                    print(f"[llm] {resp.status_code} from API, retrying in {wait:.0f}s "
+                          f"(attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait)
+                    backoff = min(backoff * 2, 60)
+                    continue
+                last_err = RuntimeError(
+                    f"LLM request failed ({resp.status_code}): {resp.text[:500]}")
+                break
+            if resp is None or resp.status_code != 200:
+                label = "primary" if pidx == 0 else "fallback"
+                print(f"[llm] provider {label} ({pcfg['base_url']}) failed: {last_err}")
+                continue
+            if pidx > 0:
+                print(f"[llm] fell back to {pcfg['base_url']} ({pcfg['model']})")
+            message = resp.json()["choices"][0]["message"]
+            tool_calls = None
+            if message.get("tool_calls"):
+                tool_calls = []
+                for tc in message["tool_calls"]:
+                    fn = tc.get("function", {})
+                    try:
+                        arguments = json.loads(fn.get("arguments") or "{}")
+                    except json.JSONDecodeError:
+                        arguments = {}
+                    tool_calls.append({"name": fn.get("name"), "parameters": arguments})
+            return message.get("content") or "", tool_calls
+        raise last_err if last_err else RuntimeError("LLM request failed for unknown reasons")
 
 
 class MockLLM:
